@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submissions Viewer</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        /* TIMER DISPLAY */
+        #viewerTimer {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #f0f7ff;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            display: inline-block;
+        }
+        
+        .count {
+            color: #667eea;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        
+        .grid {
+            display: -ms-grid;
+            display: grid;
+            -ms-grid-columns: 1fr 20px 1fr 20px 1fr;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            grid-gap: 20px;
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        
+        .card-header {
+            display: -ms-flexbox;            
+            display: flex;
+            -ms-flex-pack: justify;
+            justify-content: space-between;
+            -ms-flex-align: center;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .student-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .student-number {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .timestamp {
+            color: #999;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .card img {
+            width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        .modal.active {
+            display: -ms-flexbox;
+            display: flex;
+            -ms-flex-align: center;
+            align-items: center;
+            -ms-flex-pack: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            text-align: center;
+            position: relative;
+        }
+        
+        .modal-content img {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .close-btn {
+            padding: 12px 30px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+        
+        .close-btn:hover {
+            background: #c82333;
+        }
+        
+        .nav-buttons {
+            margin-top: 20px;
+            display: -ms-flexbox;
+            display: flex;
+            gap: 10px;
+            -ms-flex-pack: center;
+            justify-content: center;
+        }
+        
+        .nav-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .nav-btn:hover {
+            background: #5568d3;
+        }
+        
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            padding: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Student Submissions</h1>
+        
+        <!-- TIMER DISPLAY -->
+        <div id="viewerTimer">⏱️ --:--</div>
+        
+        <div class="count">Loading submissions...</div>
+    </div>
+    
+    <div id="grid" class="grid"></div>
+    
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalName"></h2>
+            <p id="modalTime"></p>
+            <img id="modalImg" src="" alt="Drawing">
+            <div class="nav-buttons">
+                <button id="prevBtn" class="nav-btn">← Previous</button>
+                <button id="nextBtn" class="nav-btn">Next →</button>
+            </div>
+            <button id="closeBtn" class="close-btn">Close</button>
+        </div>
+    </div>
+    
+    <script>
+        // IE-compatible code (no const/let, no arrow functions, no template literals)
+        var urlParams = new URLSearchParams(window.location.search);
+        var sessionId = urlParams.get('session');
+        var socket = io('http://localhost:3001', {
+            transports: ['websocket', 'polling'],
+            secure: false
+        });
+        
+        var submissions = [];
+        var currentIndex = 0;
+        var hideNamesEnabled = false;
+        var viewerTimerInterval = null;
+        var settingsLoaded = false;
+        
+        // LOAD SETTINGS IMMEDIATELY ON PAGE LOAD - FIX #1
+        if (sessionId) {
+            loadSessionSettingsAndTimer();
+            // Also start loading submissions immediately
+            loadSubmissionsHTTP();
+        }
+        
+        // Keep polling for updates every 3 seconds
+        setInterval(function() {
+            if (sessionId) {
+                loadSubmissionsHTTP();
+            }
+        }, 3000);
+        
+        socket.on('connect', function() {
+            console.log('Connected to server');
+            if (sessionId) {
+                // Listen for new submissions
+                socket.on('new-submission', function(submission) {
+                    submissions.unshift(submission);
+                    renderGrid();
+                });
+                
+                // Listen for session ended
+                socket.on('session-ended-viewer', function(data) {
+                    if (data.sessionId === sessionId) {
+                        if (viewerTimerInterval) {
+                            clearInterval(viewerTimerInterval);
+                            viewerTimerInterval = null;
+                        }
+                        var timerDisplay = document.getElementById('viewerTimer');
+                        timerDisplay.textContent = '⏱️ Activity Ended';
+                        timerDisplay.style.color = '#dc3545';
+                        timerDisplay.style.borderColor = '#dc3545';
+                    }
+                });
+            }
+        });
+        
+        // Function to load settings and start timer - IMMEDIATE!
+        function loadSessionSettingsAndTimer() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://localhost:3001/api/session/' + sessionId, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        
+                        // GET HIDE NAMES SETTING - FIX #2
+                        if (data.settings) {
+                            hideNamesEnabled = data.settings.hideNames === true;
+                            settingsLoaded = true;
+                            console.log('Hide names enabled:', hideNamesEnabled);
+                        }
+                        
+                        // START TIMER IMMEDIATELY
+                        if (!viewerTimerInterval) {
+                            if (data.timerEnd) {
+                                startViewerCountdown(data.timerEnd);
+                            } else if (data.startTime) {
+                                startViewerElapsed(data.startTime);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error loading settings:', e);
+                    }
+                }
+            };
+            xhr.send();
+        }
+        
+        function loadSubmissionsHTTP() {
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://localhost:3001/api/session/' + sessionId, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        submissions = data.drawings || [];
+                        
+                        // Update settings if not loaded yet
+                        if (!settingsLoaded && data.settings) {
+                            hideNamesEnabled = data.settings.hideNames === true;
+                            settingsLoaded = true;
+                            console.log('Hide names enabled (from submissions load):', hideNamesEnabled);
+                        }
+                        
+                        renderGrid();
+                    } catch (e) {
+                        console.error('Error parsing response:', e);
+                    }
+                }
+            };
+            xhr.send();
+        }
+        
+        // TIMER FUNCTIONS
+        function startViewerCountdown(endTime) {
+            var timerDisplay = document.getElementById('viewerTimer');
+            
+            viewerTimerInterval = setInterval(function() {
+                var now = Date.now();
+                var remaining = endTime - now;
+                
+                if (remaining <= 0) {
+                    clearInterval(viewerTimerInterval);
+                    viewerTimerInterval = null;
+                    timerDisplay.textContent = '⏱️ Activity Ended';
+                    timerDisplay.style.color = '#dc3545';
+                    timerDisplay.style.borderColor = '#dc3545';
+                    return;
+                }
+                
+                var minutes = Math.floor(remaining / 60000);
+                var seconds = Math.floor((remaining % 60000) / 1000);
+                var secStr = seconds < 10 ? '0' + seconds : '' + seconds;
+                timerDisplay.textContent = '⏱️ Time Remaining: ' + minutes + ':' + secStr;
+                
+                if (remaining < 60000) {
+                    timerDisplay.style.color = '#dc3545';
+                    timerDisplay.style.borderColor = '#dc3545';
+                }
+            }, 1000);
+        }
+        
+        function startViewerElapsed(startTime) {
+            var timerDisplay = document.getElementById('viewerTimer');
+            
+            viewerTimerInterval = setInterval(function() {
+                var elapsed = Date.now() - startTime;
+                var minutes = Math.floor(elapsed / 60000);
+                var seconds = Math.floor((elapsed % 60000) / 1000);
+                var secStr = seconds < 10 ? '0' + seconds : '' + seconds;
+                timerDisplay.textContent = '⏱️ Time Elapsed: ' + minutes + ':' + secStr;
+            }, 1000);
+        }
+        
+        function renderGrid() {
+            var grid = document.getElementById('grid');
+            var count = document.querySelector('.count');
+            
+            count.textContent = submissions.length + ' submission' + (submissions.length !== 1 ? 's' : '');
+            
+            if (submissions.length === 0) {
+                grid.innerHTML = '<div class="loading">No submissions yet. Waiting for students...</div>';
+                return;
+            }
+            
+            grid.innerHTML = '';
+            
+            // IMPORTANT: Use hideNamesEnabled from global variable
+            console.log('Rendering with hideNames:', hideNamesEnabled);
+            
+            for (var i = 0; i < submissions.length; i++) {
+                var sub = submissions[i];
+                var card = document.createElement('div');
+                card.className = 'card';
+                card.setAttribute('data-index', i);
+                card.onclick = function() {
+                    var index = parseInt(this.getAttribute('data-index'));
+                    openModal(index);
+                };
+                
+                // APPLY HIDE NAMES - FIXED!
+                var displayName;
+                if (hideNamesEnabled) {
+                    displayName = 'Student ' + (i + 1);
+                } else {
+                    displayName = sub.studentName;
+                }
+                
+                card.innerHTML = 
+                    '<div class="card-header">' +
+                        '<span class="student-name">' + escapeHtml(displayName) + '</span>' +
+                        '<span class="student-number">#' + (i + 1) + '</span>' +
+                    '</div>' +
+                    '<p class="timestamp">' + formatTime(sub.timestamp) + '</p>' +
+                    '<img src="' + sub.drawingData + '" alt="Drawing">';
+                
+                grid.appendChild(card);
+            }
+        }
+        
+        function openModal(index) {
+            currentIndex = index;
+            var sub = submissions[index];
+            
+            // APPLY HIDE NAMES IN MODAL TOO - FIXED!
+            var displayName;
+            if (hideNamesEnabled) {
+                displayName = 'Student ' + (index + 1);
+            } else {
+                displayName = sub.studentName;
+            }
+            
+            document.getElementById('modalName').textContent = displayName;
+            document.getElementById('modalTime').textContent = formatTime(sub.timestamp);
+            document.getElementById('modalImg').src = sub.drawingData;
+            document.getElementById('modal').className = 'modal active';
+            
+            updateNavButtons();
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').className = 'modal';
+        }
+        
+        function navigate(direction) {
+            currentIndex += direction;
+            openModal(currentIndex);
+        }
+        
+        function updateNavButtons() {
+            document.getElementById('prevBtn').disabled = currentIndex === 0;
+            document.getElementById('nextBtn').disabled = currentIndex === submissions.length - 1;
+        }
+        
+        document.getElementById('closeBtn').onclick = closeModal;
+        document.getElementById('modal').onclick = function(e) {
+            if (e.target.id === 'modal') {
+                closeModal();
+            }
+        };
+        document.getElementById('prevBtn').onclick = function() {
+            navigate(-1);
+        };
+        document.getElementById('nextBtn').onclick = function() {
+            navigate(1);
+        };
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            var modal = document.getElementById('modal');
+            if (modal.className.indexOf('active') === -1) return;
+            
+            if (e.key === 'Escape' || e.keyCode === 27) closeModal();
+            if ((e.key === 'ArrowLeft' || e.keyCode === 37) && currentIndex > 0) navigate(-1);
+            if ((e.key === 'ArrowRight' || e.keyCode === 39) && currentIndex < submissions.length - 1) navigate(1);
+        });
+        
+        function formatTime(timestamp) {
+            var date = new Date(timestamp);
+            return date.toLocaleTimeString();
+        }
+        
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            if (div.textContent !== undefined) {
+                div.textContent = text;
+            } else {
+                div.innerText = text;
+            }
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

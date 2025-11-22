@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw on Slide</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            color: #333;
+        }
+        
+        .name-input {
+            padding: 8px 15px;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: auto;
+        }
+        
+        .canvas-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 20px;
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        #drawingCanvas {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: crosshair;
+            display: block;
+            touch-action: none;
+        }
+        
+        .toolbar {
+            background: white;
+            padding: 15px 20px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .tool-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        /* Timer group - centered and wider */
+        .timer-group {
+            flex: 1;
+            text-align: center;
+            min-width: 150px;
+        }
+        
+        #studentTimer {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            padding: 8px 16px;
+            background: #f0f7ff;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+        }
+        
+        .tool-btn {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .tool-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .tool-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .color-picker {
+            width: 50px;
+            height: 40px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .size-slider {
+            width: 120px;
+        }
+        
+        .submit-btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+            animation: slideIn 0.3s;
+            z-index: 1000;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .status.success {
+            border-left: 4px solid #28a745;
+            color: #28a745;
+        }
+        
+        .status.error {
+            border-left: 4px solid #dc3545;
+            color: #dc3545;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 16px;
+            }
+            
+            .toolbar {
+                padding: 10px;
+            }
+            
+            .tool-btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            
+            .canvas-wrapper {
+                padding: 10px;
+            }
+            
+            #studentTimer {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Draw on Slide</h1>
+        <input type="text" id="studentName" class="name-input" placeholder="Enter your name" maxlength="30">
+    </div>
+    
+    <div class="canvas-container">
+        <div class="canvas-wrapper">
+            <canvas id="drawingCanvas" width="800" height="600"></canvas>
+        </div>
+    </div>
+    
+    <div class="toolbar">
+        <!-- TIMER DISPLAY - Centered at top -->
+        <div class="timer-group">
+            <div id="studentTimer">⏱️ --:--</div>
+        </div>
+        
+        <div class="tool-group">
+            <button class="tool-btn active" id="penBtn">✏️ Pen</button>
+            <button class="tool-btn" id="eraserBtn">🧹 Eraser</button>
+        </div>
+        
+        <div class="tool-group">
+            <label for="colorPicker">Color:</label>
+            <input type="color" id="colorPicker" class="color-picker" value="#000000" title="Select drawing color">
+        </div>
+        
+        <div class="tool-group">
+            <label for="sizeSlider">Size:</label>
+            <input type="range" id="sizeSlider" class="size-slider" min="1" max="20" value="3" title="Adjust brush size">
+            <span id="sizeValue">3</span>
+        </div>
+        
+        <div class="tool-group">
+            <button class="tool-btn" id="clearBtn">🗑️ Clear</button>
+        </div>
+        
+        <button class="submit-btn" id="submitBtn">Submit Drawing</button>
+    </div>
+    
+    <div class="status" id="status"></div>
+    
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const socket = io('http://localhost:3001', {
+            transports: ['websocket', 'polling'],
+            secure: false
+        });
+        
+        // Create drawing layer (separate from slide background)
+        const drawingCanvas = document.createElement('canvas');
+        drawingCanvas.width = canvas.width;
+        drawingCanvas.height = canvas.height;
+        const drawingCtx = drawingCanvas.getContext('2d');
+        
+        // Get session ID from URL
+        const sessionId = window.location.pathname.split('/').pop();
+        
+        let isDrawing = false;
+        let currentTool = 'pen';
+        let currentColor = '#000000';
+        let currentSize = 3;
+        let slideImage = new Image();
+        let slideLoaded = false;
+        let studentTimerInterval = null;
+        
+        // Load slide image AND TIMER IMMEDIATELY - FIX!
+        loadSlideImage();
+        
+        // Join session
+        socket.emit('student-join', sessionId);
+        
+        // Listen for session end
+        socket.on('session-ended', () => {
+            // Clear timer
+            if (studentTimerInterval) {
+                clearInterval(studentTimerInterval);
+                studentTimerInterval = null;
+            }
+            
+            const timerDisplay = document.getElementById('studentTimer');
+            timerDisplay.textContent = '⏱️ Activity Ended';
+            timerDisplay.style.color = '#dc3545';
+            timerDisplay.style.borderColor = '#dc3545';
+            
+            showStatus('Activity has ended. No more submissions allowed.', 'error');
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = '❌ Activity Ended';
+            document.getElementById('submitBtn').style.background = '#dc3545';
+            
+            // Disable drawing
+            canvas.style.cursor = 'not-allowed';
+            canvas.onmousedown = null;
+            canvas.onmousemove = null;
+            canvas.onmouseup = null;
+            canvas.onmouseout = null;
+            canvas.ontouchstart = null;
+            canvas.ontouchmove = null;
+            canvas.ontouchend = null;
+        });
+        
+        // Tool selection
+        document.getElementById('penBtn').onclick = () => {
+            currentTool = 'pen';
+            setActiveTool('penBtn');
+        };
+        
+        document.getElementById('eraserBtn').onclick = () => {
+            currentTool = 'eraser';
+            setActiveTool('eraserBtn');
+        };
+        
+        document.getElementById('colorPicker').oninput = (e) => {
+            currentColor = e.target.value;
+        };
+        
+        document.getElementById('sizeSlider').oninput = (e) => {
+            currentSize = e.target.value;
+            document.getElementById('sizeValue').textContent = currentSize;
+        };
+        
+        document.getElementById('clearBtn').onclick = () => {
+            if (confirm('Clear your drawing?')) {
+                drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                redraw();
+            }
+        };
+        
+        document.getElementById('submitBtn').onclick = submitDrawing;
+        
+        // Drawing functions
+        canvas.onmousedown = startDrawing;
+        canvas.onmousemove = draw;
+        canvas.onmouseup = stopDrawing;
+        canvas.onmouseout = stopDrawing;
+        
+        // Touch support
+        canvas.ontouchstart = (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        };
+        
+        canvas.ontouchmove = (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        };
+        
+        canvas.ontouchend = (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
+        };
+        
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            drawingCtx.beginPath();
+            drawingCtx.moveTo(x, y);
+        }
+        
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            drawingCtx.lineWidth = currentSize;
+            drawingCtx.lineCap = 'round';
+            drawingCtx.lineJoin = 'round';
+            
+            if (currentTool === 'pen') {
+                drawingCtx.strokeStyle = currentColor;
+                drawingCtx.globalCompositeOperation = 'source-over';
+            } else {
+                // Eraser - actually erases from drawing layer only
+                drawingCtx.globalCompositeOperation = 'destination-out';
+                drawingCtx.lineWidth = currentSize * 2;
+            }
+            
+            drawingCtx.lineTo(x, y);
+            drawingCtx.stroke();
+            drawingCtx.beginPath();
+            drawingCtx.moveTo(x, y);
+            
+            // Redraw composite
+            redraw();
+        }
+        
+        function stopDrawing() {
+            isDrawing = false;
+            drawingCtx.beginPath();
+        }
+        
+        function redraw() {
+            // Clear main canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw slide image first
+            if (slideLoaded) {
+                ctx.drawImage(slideImage, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Draw user's drawings on top
+            ctx.drawImage(drawingCanvas, 0, 0);
+        }
+        
+        function setActiveTool(btnId) {
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(btnId).classList.add('active');
+        }
+        
+        // TIMER FUNCTIONS
+        function startStudentCountdown(endTime) {
+            const timerDisplay = document.getElementById('studentTimer');
+            
+            studentTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const remaining = endTime - now;
+                
+                if (remaining <= 0) {
+                    clearInterval(studentTimerInterval);
+                    studentTimerInterval = null;
+                    timerDisplay.textContent = '⏱️ Time Up!';
+                    timerDisplay.style.color = '#dc3545';
+                    timerDisplay.style.borderColor = '#dc3545';
+                    
+                    // Disable submit button
+                    document.getElementById('submitBtn').disabled = true;
+                    document.getElementById('submitBtn').textContent = '⏱️ Time Expired';
+                    return;
+                }
+                
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                timerDisplay.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Warning when < 1 minute
+                if (remaining < 60000) {
+                    timerDisplay.style.color = '#dc3545';
+                    timerDisplay.style.borderColor = '#dc3545';
+                }
+            }, 1000);
+        }
+        
+        function startStudentElapsed(startTime) {
+            const timerDisplay = document.getElementById('studentTimer');
+            
+            studentTimerInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const minutes = Math.floor(elapsed / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                timerDisplay.textContent = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+        
+        // LOAD SLIDE IMAGE AND START TIMER IMMEDIATELY - FIX!
+        async function loadSlideImage() {
+            try {
+                const response = await fetch(`http://localhost:3001/api/session/${sessionId}`);
+                const data = await response.json();
+                
+                slideImage.onload = () => {
+                    slideLoaded = true;
+                    redraw();
+                };
+                slideImage.onerror = () => {
+                    console.error('Failed to load slide image');
+                    drawPlaceholder();
+                };
+                slideImage.src = data.slideImage;
+                
+                // START TIMER IMMEDIATELY - NO DELAY!
+                if (data.timerEnd) {
+                    startStudentCountdown(data.timerEnd);
+                } else if (data.startTime) {
+                    startStudentElapsed(data.startTime);
+                }
+            } catch (error) {
+                console.error('Error loading slide:', error);
+                drawPlaceholder();
+            }
+        }
+        
+        function drawPlaceholder() {
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#333';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Slide will appear here', canvas.width/2, canvas.height/2);
+        }
+        
+        async function submitDrawing() {
+            const studentName = document.getElementById('studentName').value.trim() || 'Anonymous';
+            
+            // Create final composite for submission
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = canvas.width;
+            finalCanvas.height = canvas.height;
+            const finalCtx = finalCanvas.getContext('2d');
+            
+            // Draw slide
+            if (slideLoaded) {
+                finalCtx.drawImage(slideImage, 0, 0, canvas.width, canvas.height);
+            }
+            
+            // Draw user's marks
+            finalCtx.drawImage(drawingCanvas, 0, 0);
+            
+            const drawingData = finalCanvas.toDataURL('image/png');
+            
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = 'Submitting...';
+            
+            socket.emit('submit-drawing', {
+                sessionId,
+                studentName,
+                drawingData
+            });
+            
+            // Wait for confirmation
+            socket.once('submission-confirmed', (response) => {
+                if (response.success) {
+                    showStatus(response.message || 'Drawing submitted successfully!', 'success');
+                    document.getElementById('submitBtn').textContent = '✓ Submitted';
+                    document.getElementById('submitBtn').style.background = '#28a745';
+                } else {
+                    showStatus(response.error || 'Failed to submit. Please try again.', 'error');
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('submitBtn').textContent = 'Submit Drawing';
+                }
+            });
+        }
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

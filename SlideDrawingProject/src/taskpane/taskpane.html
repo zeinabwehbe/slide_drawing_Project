@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slide Drawing Activity</title>
+    <link rel="stylesheet" href="taskpane.css">
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h2>🎨 Slide Drawing Activity</h2>
+        </header>
+        
+        <main>
+            <!-- Step 1: Start Activity with Settings -->
+            <section id="startSection">
+                <h3>Upload Slide Image</h3>
+                <p>Upload a screenshot of your slide (optional).</p>
+                
+                <div class="upload-box">
+                    <input type="file" id="slideImageUpload" accept="image/*" style="display: none;">
+                    <label for="slideImageUpload" class="upload-label">
+                        📸 Upload Slide Image
+                    </label>
+                    <div id="imagePreview" style="display: none; margin-top: 15px;">
+                        <img id="previewImg" style="max-width: 100%; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <br>
+                        <button id="removeImageBtn" class="btn-small" style="margin-top: 10px;">Remove Image</button>
+                    </div>
+                </div>
+                
+                <h3 style="margin-top: 20px;">⚙️ Activity Settings</h3>
+                
+                <div class="settings-box">
+                    <label style="font-weight: 600; margin-bottom: 8px; display: block;">⏱️ Timer:</label>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 5px;">
+                            <input type="radio" name="timerOption" value="unlimited" checked> No time limit
+                        </label>
+                        <label style="display: block; margin-bottom: 8px;">
+                            <input type="radio" name="timerOption" value="timed"> Set time limit (minutes):
+                            <input type="number" id="timerMinutes" min="1" max="60" value="5" style="width: 60px; padding: 5px; border: 2px solid #e0e0e0; border-radius: 4px; margin-left: 5px;" disabled>
+                        </label>
+                    </div>
+                    
+                    <label style="font-weight: 600; margin-bottom: 8px; display: block;">Options:</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label>
+                            <input type="checkbox" id="hideNames"> Hide student names
+                        </label>
+                        <label>
+                            <input type="checkbox" id="autoOpenViewer"> Auto-open viewer window
+                        </label>
+                        <label>
+                            <input type="checkbox" id="allowResubmit" checked> Allow students to edit/resubmit
+                        </label>
+                    </div>
+                </div>
+                
+                <button id="startButton" class="btn-primary" style="margin-top: 15px;">Start Activity</button>
+            </section>
+            
+            <!-- Step 2: Activity Active -->
+            <section id="activeSection" style="display: none;">
+                <div class="success-box">
+                    <h3>✅ Activity Active</h3>
+                    
+                    <!-- TIMER DISPLAY - NEW! -->
+                    <p id="timerDisplay" style="font-size: 18px; font-weight: bold; color: #667eea; margin: 10px 0; text-align: center;">
+                        ⏱️ Time: --:--
+                    </p>
+                    
+                    <p>Students can access the drawing activity at:</p>
+                    <div class="url-box">
+                        <input type="text" id="studentUrl" readonly>
+                        <button id="copyUrlBtn" class="btn-small">Copy</button>
+                    </div>
+                    <p class="info-text">Session ID: <strong id="sessionId"></strong></p>
+                </div>
+                
+                <div class="submissions-box">
+                    <h3>Student Submissions (<span id="submissionCount">0</span>)</h3>
+                    <div style="background: #f0f7ff; border: 1px solid #667eea; border-radius: 6px; padding: 10px; margin: 10px 0;">
+                        <p style="margin: 0 0 8px 0; font-size: 13px; color: #666;">📊 View Submissions Link:</p>
+                        <div class="url-box">
+                            <input type="text" id="viewerUrl" readonly>
+                            <button id="copyViewerBtn" class="btn-small">Copy</button>
+                        </div>
+                    </div>
+                    <button id="viewAllBtn" class="btn-secondary">📊 View All in Window</button>
+                    <div id="submissionsList"></div>
+                    <button id="refreshBtn" class="btn-secondary">Refresh</button>
+                </div>
+                
+                <button id="endButton" class="btn-danger">End Activity</button>
+            </section>
+            
+            <!-- Loading State -->
+            <section id="loadingSection" style="display: none;">
+                <div class="loader"></div>
+                <p>Processing...</p>
+            </section>
+        </main>
+    </div>
+    
+    <script src="taskpane.js"></script>
+</body>
+</html>
