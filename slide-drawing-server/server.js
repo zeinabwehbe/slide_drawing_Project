@@ -3,7 +3,11 @@ const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const db = require('./db');
+
+const JWT_SECRET = process.env.JWT_SECRET || '***REMOVED***';
 
 const app = express();
 app.use(cors());
@@ -17,6 +21,202 @@ const io = socketIo(server, {
 
 app.use(express.static('public'));
 app.use(express.json({limit: '10mb'})); // Reduced from 50mb
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Register endpoint
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
+
+    // Check if user already exists
+    const [existingUsers] = await db.query(
+      'SELECT id FROM teachers WHERE username = ? OR email = ?',
+      [username, email]
+    );
+
+    if (existingUsers.length > 0) {
+      return res.status(409).json({ error: 'Username or email already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert new teacher
+    const [result] = await db.query(
+      'INSERT INTO teachers (username, email, password_hash) VALUES (?, ?, ?)',
+      [username, email, passwordHash]
+    );
+
+    // Generate token
+    const token = jwt.sign(
+      { id: result.insertId, username, email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: { id: result.insertId, username, email }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Find user
+    const [users] = await db.query(
+      'SELECT * FROM teachers WHERE username = ?',
+      [username]
+    );
+
+    if (users.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = users[0];
+
+    // Verify password
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { id: user.id, username: user.username, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: { id: user.id, username: user.username, email: user.email }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Verify token endpoint
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+  res.json({ success: true, user: req.user });
+});
+
+// Get all sessions for a teacher
+app.get('/api/teacher/sessions', authenticateToken, async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    
+    const [sessions] = await db.query(
+      `SELECT 
+        s.id, 
+        s.timer_duration, 
+        s.hide_names, 
+        s.allow_resubmit, 
+        s.start_time, 
+        s.timer_end, 
+        s.closed, 
+        s.created_at,
+        COUNT(DISTINCT d.id) as submission_count
+      FROM sessions s
+      LEFT JOIN drawings d ON s.id = d.session_id
+      WHERE s.teacher_id = ?
+      GROUP BY s.id
+      ORDER BY s.created_at DESC`,
+      [teacherId]
+    );
+    
+    res.json({ success: true, sessions });
+  } catch (error) {
+    console.error('Error fetching teacher sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch sessions' });
+  }
+});
+
+// Get all submissions for a specific session (teacher only)
+app.get('/api/teacher/sessions/:sessionId/submissions', authenticateToken, async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    const sessionId = req.params.sessionId;
+    
+    // Verify session belongs to this teacher
+    const [sessions] = await db.query(
+      'SELECT * FROM sessions WHERE id = ? AND teacher_id = ?',
+      [sessionId, teacherId]
+    );
+    
+    if (sessions.length === 0) {
+      return res.status(403).json({ error: 'Access denied or session not found' });
+    }
+    
+    const session = sessions[0];
+    
+    // Get all drawings for this session
+    const [drawings] = await db.query(
+      'SELECT id, student_name, drawing_data, timestamp FROM drawings WHERE session_id = ? ORDER BY timestamp DESC',
+      [sessionId]
+    );
+    
+    res.json({
+      success: true,
+      session: {
+        id: session.id,
+        slideImage: session.slide_image,
+        timerDuration: session.timer_duration,
+        hideNames: session.hide_names,
+        allowResubmit: session.allow_resubmit,
+        startTime: session.start_time,
+        timerEnd: session.timer_end,
+        closed: session.closed,
+        createdAt: session.created_at
+      },
+      submissions: drawings.map(d => ({
+        id: d.id,
+        studentName: d.student_name,
+        drawingData: d.drawing_data,
+        timestamp: d.timestamp
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching session submissions:', error);
+    res.status(500).json({ error: 'Failed to fetch submissions' });
+  }
+});
 
 // Serve student interface
 app.get('/student/:sessionId', (req, res) => {
@@ -78,7 +278,12 @@ io.on('connection', (socket) => {
   socket.on('create-session', async (data) => {
     try {
       const sessionId = Math.random().toString(36).substring(7);
-      const { slideImage, settings } = data;
+      const { slideImage, settings, teacherId } = data;
+      
+      if (!teacherId) {
+        socket.emit('session-error', { message: 'Teacher authentication required' });
+        return;
+      }
       
       const timerDuration = settings.timerDuration || null;
       const startTime = Date.now();
@@ -87,10 +292,11 @@ io.on('connection', (socket) => {
       // Insert session into database
       await db.query(
         `INSERT INTO sessions 
-        (id, slide_image, teacher_socket_id, timer_duration, hide_names, allow_resubmit, start_time, timer_end, closed) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, teacher_id, slide_image, teacher_socket_id, timer_duration, hide_names, allow_resubmit, start_time, timer_end, closed) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sessionId,
+          teacherId,
           slideImage,
           socket.id,
           timerDuration,

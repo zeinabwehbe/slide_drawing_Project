@@ -15,16 +15,74 @@
         </header>
         
         <main>
+            <!-- Authentication Section -->
+            <section id="authSection">
+                <div class="auth-container">
+                    <h3>🔐 Teacher Login</h3>
+                    <p style="color: #666; font-size: 14px; margin-bottom: 20px;">Please login to create activities</p>
+                    
+                    <div id="loginForm">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Username:</label>
+                            <input type="text" id="loginUsername" placeholder="Enter username" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Password:</label>
+                            <input type="password" id="loginPassword" placeholder="Enter password" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                        </div>
+                        <button id="loginBtn" class="btn-primary" style="width: 100%;">Login</button>
+                        <p style="text-align: center; margin-top: 15px; font-size: 14px;">
+                            Don't have an account? <a href="#" id="showRegisterLink" style="color: #667eea; text-decoration: none; font-weight: 600;">Register</a>
+                        </p>
+                    </div>
+                    
+                    <div id="registerForm" style="display: none;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Username:</label>
+                            <input type="text" id="registerUsername" placeholder="Choose username" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Email:</label>
+                            <input type="email" id="registerEmail" placeholder="Enter email" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Password:</label>
+                            <input type="password" id="registerPassword" placeholder="Choose password" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 4px;">
+                        </div>
+                        <button id="registerBtn" class="btn-primary" style="width: 100%;">Register</button>
+                        <p style="text-align: center; margin-top: 15px; font-size: 14px;">
+                            Already have an account? <a href="#" id="showLoginLink" style="color: #667eea; text-decoration: none; font-weight: 600;">Login</a>
+                        </p>
+                    </div>
+                    
+                    <div id="authMessage" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
+                </div>
+            </section>
+            
             <!-- Step 1: Start Activity with Settings -->
-            <section id="startSection">
-                <h3>Upload Slide Image</h3>
-                <p>Upload a screenshot of your slide (optional).</p>
+            <section id="startSection" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div>
+                        <p style="margin: 0; color: #666;">Logged in as: <strong id="loggedInUser"></strong></p>
+                    </div>
+                    <button id="logoutBtn" class="btn-small">Logout</button>
+                </div>
+                
+                <h3>Slide Image</h3>
+                <p>Upload a screenshot of your slide (optional). Use <strong>Win+Shift+S</strong> to capture.</p>
                 
                 <div class="upload-box">
-                    <input type="file" id="slideImageUpload" accept="image/*" style="display: none;">
-                    <label for="slideImageUpload" class="upload-label">
-                        📸 Upload Slide Image
-                    </label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <label for="slideImageUpload" class="btn-secondary" style="flex: 1; text-align: center; padding: 10px; cursor: pointer; margin: 0;">
+                            📸 Upload Screenshot
+                        </label>
+                        <input type="file" id="slideImageUpload" accept="image/*" style="display: none;">
+                        <button id="captureSlideBtn" class="btn-secondary" style="flex: 1;">
+                            🏷️ Use Placeholder
+                        </button>
+                    </div>
+                    <p style="font-size: 12px; color: #666; margin-top: 0;">💡 Tip: Press <kbd style="padding: 2px 5px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 3px;">Win+Shift+S</kbd> then upload your screenshot</p>
+                    
                     <div id="imagePreview" style="display: none; margin-top: 15px;">
                         <img id="previewImg" style="max-width: 100%; max-height: 200px; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                         <br>
@@ -61,6 +119,40 @@
                 </div>
                 
                 <button id="startButton" class="btn-primary" style="margin-top: 15px;">Start Activity</button>
+                
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+                
+                <button id="viewHistoryBtn" class="btn-secondary" style="width: 100%;">📚 View Previous Sessions</button>
+            </section>
+            
+            <!-- Teacher History/Dashboard Section -->
+            <section id="historySection" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">📚 Previous Sessions</h3>
+                    <button id="backToCreateBtn" class="btn-small">← Back</button>
+                </div>
+                
+                <div id="sessionsList" style="max-height: 500px; overflow-y: auto;">
+                    <p style="text-align: center; color: #666;">Loading sessions...</p>
+                </div>
+            </section>
+            
+            <!-- Session Details Section -->
+            <section id="sessionDetailSection" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">📊 Session Details</h3>
+                    <button id="backToHistoryBtn" class="btn-small">← Back</button>
+                </div>
+                
+                <div id="sessionInfo" style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <!-- Session info will be populated here -->
+                </div>
+                
+                <h4 style="margin: 15px 0 10px 0;">Student Submissions (<span id="detailSubmissionCount">0</span>)</h4>
+                
+                <div id="detailSubmissionsList" style="max-height: 400px; overflow-y: auto;">
+                    <p style="text-align: center; color: #666;">Loading submissions...</p>
+                </div>
             </section>
             
             <!-- Step 2: Activity Active -->

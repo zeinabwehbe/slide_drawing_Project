@@ -4,16 +4,40 @@ let socket;
 let currentSessionId = null;
 let uploadedSlideImage = null;
 let timerInterval = null;
+let currentUser = null;
+let authToken = null;
 const SERVER_URL = 'http://localhost:3001';
 
 Office.onReady((info) => {
   if (info.host === Office.HostType.PowerPoint) {
     setupEventListeners();
+    checkAuthentication();
     connectToServer();
   }
 });
 
 function setupEventListeners() {
+  // Auth listeners
+  document.getElementById('loginBtn').onclick = handleLogin;
+  document.getElementById('registerBtn').onclick = handleRegister;
+  document.getElementById('showRegisterLink').onclick = (e) => {
+    e.preventDefault();
+    document.getElementById('loginForm').style.display = 'none';
+    document.getElementById('registerForm').style.display = 'block';
+    document.getElementById('authMessage').style.display = 'none';
+  };
+  document.getElementById('showLoginLink').onclick = (e) => {
+    e.preventDefault();
+    document.getElementById('registerForm').style.display = 'none';
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('authMessage').style.display = 'none';
+  };
+  document.getElementById('logoutBtn').onclick = handleLogout;
+  document.getElementById('viewHistoryBtn').onclick = showHistory;
+  document.getElementById('backToCreateBtn').onclick = () => showSection('startSection');
+  document.getElementById('backToHistoryBtn').onclick = showHistory;
+  
+  // Activity listeners
   document.getElementById('startButton').onclick = startActivity;
   document.getElementById('endButton').onclick = endActivity;
   document.getElementById('copyUrlBtn').onclick = copyUrl;
@@ -21,6 +45,7 @@ function setupEventListeners() {
   document.getElementById('viewAllBtn').onclick = openSubmissionsWindow;
   document.getElementById('slideImageUpload').onchange = handleImageUpload;
   document.getElementById('removeImageBtn').onclick = removeImage;
+  document.getElementById('captureSlideBtn').onclick = handleCaptureSlide;
   
   // Timer option toggle
   var timerRadios = document.getElementsByName('timerOption');
@@ -29,6 +54,33 @@ function setupEventListeners() {
       var timerInput = document.getElementById('timerMinutes');
       timerInput.disabled = this.value === 'unlimited';
     };
+  }
+  
+  // Enter key handlers for auth forms
+  document.getElementById('loginPassword').onkeypress = (e) => {
+    if (e.key === 'Enter') handleLogin();
+  };
+  document.getElementById('registerPassword').onkeypress = (e) => {
+    if (e.key === 'Enter') handleRegister();
+  };
+}
+
+async function handleCaptureSlide() {
+  try {
+    showMessage('Generating slide placeholder...', 'info');
+    const slideImage = await captureCurrentSlide();
+    
+    if (slideImage) {
+      uploadedSlideImage = slideImage;
+      document.getElementById('previewImg').src = uploadedSlideImage;
+      document.getElementById('imagePreview').style.display = 'block';
+      showMessage('Placeholder created! Students will see slide reference.', 'success');
+    } else {
+      showMessage('Failed to create placeholder', 'error');
+    }
+  } catch (error) {
+    console.error('Error capturing slide:', error);
+    showMessage('Error: ' + error.message, 'error');
   }
 }
 
@@ -70,6 +122,278 @@ function removeImage() {
   if (preview && preview.style) {
     preview.style.display = 'none';
   }
+}
+
+// Authentication Functions
+function checkAuthentication() {
+  const token = localStorage.getItem('authToken');
+  const user = localStorage.getItem('authUser');
+  
+  if (token && user) {
+    // Verify token with server
+    fetch(`${SERVER_URL}/api/auth/verify`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        currentUser = JSON.parse(user);
+        authToken = token;
+        showSection('startSection');
+        document.getElementById('loggedInUser').textContent = currentUser.username;
+      } else {
+        showSection('authSection');
+      }
+    })
+    .catch(() => {
+      showSection('authSection');
+    });
+  } else {
+    showSection('authSection');
+  }
+}
+
+async function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  
+  if (!username || !password) {
+    showAuthMessage('Please enter username and password', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${SERVER_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentUser = data.user;
+      authToken = data.token;
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('authUser', JSON.stringify(data.user));
+      
+      showSection('startSection');
+      document.getElementById('loggedInUser').textContent = currentUser.username;
+      showAuthMessage('Login successful!', 'success');
+    } else {
+      showAuthMessage(data.error || 'Login failed', 'error');
+    }
+  } catch (error) {
+    showAuthMessage('Connection error. Make sure server is running.', 'error');
+  }
+}
+
+async function handleRegister() {
+  const username = document.getElementById('registerUsername').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value;
+  
+  if (!username || !email || !password) {
+    showAuthMessage('Please fill all fields', 'error');
+    return;
+  }
+  
+  if (password.length < 6) {
+    showAuthMessage('Password must be at least 6 characters', 'error');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${SERVER_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentUser = data.user;
+      authToken = data.token;
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('authUser', JSON.stringify(data.user));
+      
+      showSection('startSection');
+      document.getElementById('loggedInUser').textContent = currentUser.username;
+      showAuthMessage('Registration successful!', 'success');
+    } else {
+      showAuthMessage(data.error || 'Registration failed', 'error');
+    }
+  } catch (error) {
+    showAuthMessage('Connection error. Make sure server is running.', 'error');
+  }
+}
+
+function handleLogout() {
+  currentUser = null;
+  authToken = null;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('authUser');
+  showSection('authSection');
+  
+  // Clear form fields
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+}
+
+function showAuthMessage(message, type) {
+  const msgEl = document.getElementById('authMessage');
+  msgEl.textContent = message;
+  msgEl.style.display = 'block';
+  msgEl.style.background = type === 'success' ? '#d4edda' : '#f8d7da';
+  msgEl.style.color = type === 'success' ? '#155724' : '#721c24';
+  msgEl.style.border = type === 'success' ? '1px solid #c3e6cb' : '1px solid #f5c6cb';
+}
+
+// Teacher History Functions
+async function showHistory() {
+  showSection('historySection');
+  
+  try {
+    const response = await fetch(`${SERVER_URL}/api/teacher/sessions`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      displaySessionsList(data.sessions);
+    } else {
+      document.getElementById('sessionsList').innerHTML = '<p style="color: #666; text-align: center;">Failed to load sessions</p>';
+    }
+  } catch (error) {
+    document.getElementById('sessionsList').innerHTML = '<p style="color: #666; text-align: center;">Error loading sessions</p>';
+  }
+}
+
+function displaySessionsList(sessions) {
+  const listEl = document.getElementById('sessionsList');
+  
+  if (sessions.length === 0) {
+    listEl.innerHTML = '<p style="color: #666; text-align: center;">No previous sessions found</p>';
+    return;
+  }
+  
+  listEl.innerHTML = sessions.map(session => {
+    const date = new Date(session.created_at).toLocaleString();
+    const status = session.closed ? '❌ Closed' : '✅ Active';
+    const timer = session.timer_duration ? `${session.timer_duration} min` : 'No limit';
+    
+    return `
+      <div class="session-card" data-session-id="${session.id}" style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px; cursor: pointer;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+          <div>
+            <strong style="font-size: 14px;">${date}</strong>
+            <br>
+            <span style="font-size: 12px; color: #666;">ID: ${session.id}</span>
+          </div>
+          <span style="font-size: 12px; padding: 4px 8px; border-radius: 4px; background: ${session.closed ? '#fee' : '#efe'}; color: ${session.closed ? '#c33' : '#3c3'};">${status}</span>
+        </div>
+        <div style="font-size: 13px; color: #666;">
+          <div style="margin: 5px 0;">⏱️ Timer: ${timer}</div>
+          <div style="margin: 5px 0;">📝 Submissions: ${session.submission_count}</div>
+          <div style="margin: 5px 0;">👁️ Hide Names: ${session.hide_names ? 'Yes' : 'No'}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Add click handlers to session cards
+  document.querySelectorAll('.session-card').forEach(card => {
+    card.addEventListener('click', function() {
+      const sessionId = this.getAttribute('data-session-id');
+      viewSessionDetails(sessionId);
+    });
+  });
+}
+
+async function viewSessionDetails(sessionId) {
+  showSection('sessionDetailSection');
+  document.getElementById('sessionInfo').innerHTML = '<p style="text-align: center; color: #666;">Loading session details...</p>';
+  document.getElementById('detailSubmissionsList').innerHTML = '<p style="text-align: center; color: #666;">Loading submissions...</p>';
+  
+  try {
+    const response = await fetch(`${SERVER_URL}/api/teacher/sessions/${sessionId}/submissions`, {
+      headers: {
+        'Authorization': `Bearer ${authToken}`
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
+      displaySessionDetails(data.session, data.submissions);
+    } else {
+      console.error('Session details error:', data);
+      document.getElementById('sessionInfo').innerHTML = `<p style="color: #c33;">${data.error || 'Failed to load session details'}</p>`;
+      document.getElementById('detailSubmissionsList').innerHTML = '';
+    }
+  } catch (error) {
+    console.error('Session details fetch error:', error);
+    document.getElementById('sessionInfo').innerHTML = '<p style="color: #c33;">Error loading session details. Check console for details.</p>';
+    document.getElementById('detailSubmissionsList').innerHTML = '';
+  }
+}
+
+function displaySessionDetails(session, submissions) {
+  const date = new Date(session.createdAt).toLocaleString();
+  const status = session.closed ? '❌ Closed' : '✅ Active';
+  const timer = session.timerDuration ? `${session.timerDuration} minutes` : 'No time limit';
+  
+  document.getElementById('sessionInfo').innerHTML = `
+    <div style="margin-bottom: 10px;">
+      <strong>Session ID:</strong> ${session.id}
+    </div>
+    <div style="margin-bottom: 10px;">
+      <strong>Created:</strong> ${date}
+    </div>
+    <div style="margin-bottom: 10px;">
+      <strong>Status:</strong> ${status}
+    </div>
+    <div style="margin-bottom: 10px;">
+      <strong>Timer:</strong> ${timer}
+    </div>
+    <div style="margin-bottom: 10px;">
+      <strong>Hide Names:</strong> ${session.hideNames ? 'Yes' : 'No'}
+    </div>
+    <div style="margin-bottom: 10px;">
+      <strong>Allow Resubmit:</strong> ${session.allowResubmit ? 'Yes' : 'No'}
+    </div>
+  `;
+  
+  document.getElementById('detailSubmissionCount').textContent = submissions.length;
+  
+  const listEl = document.getElementById('detailSubmissionsList');
+  
+  if (submissions.length === 0) {
+    listEl.innerHTML = '<p style="color: #666; text-align: center;">No submissions yet</p>';
+    return;
+  }
+  
+  listEl.innerHTML = submissions.map(sub => {
+    const timestamp = new Date(sub.timestamp).toLocaleString();
+    
+    return `
+      <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+          <strong>${sub.studentName}</strong>
+          <span style="font-size: 12px; color: #666;">${timestamp}</span>
+        </div>
+        <div style="text-align: center;">
+          <img src="${sub.drawingData}" style="max-width: 100%; border-radius: 4px; border: 1px solid #e0e0e0;">
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function connectToServer() {
@@ -227,10 +551,11 @@ async function startActivity() {
     const slideImage = uploadedSlideImage || await captureCurrentSlide();
     console.log('Slide image ready');
     
-    // Create session with settings - INCLUDING TIMER!
+    // Create session with settings - INCLUDING TIMER AND TEACHER ID!
     console.log('Creating session via Socket.io...');
     socket.emit('create-session', { 
       slideImage: slideImage,
+      teacherId: currentUser.id,
       settings: {
         timerDuration: timerDuration,
         hideNames: hideNames,
@@ -249,18 +574,37 @@ async function startActivity() {
 async function captureCurrentSlide() {
   return new Promise(async (resolve, reject) => {
     try {
-      Office.context.document.getSelectedDataAsync(
-        Office.CoercionType.SlideRange,
-        async (result) => {
-          if (result.status === Office.AsyncResultStatus.Succeeded) {
-            resolve(createStyledPlaceholder());
-          } else {
-            resolve(createStyledPlaceholder());
+      // Try to get the current slide using PowerPoint API
+      await PowerPoint.run(async (context) => {
+        try {
+          const slides = context.presentation.slides;
+          slides.load("items");
+          await context.sync();
+          
+          const selectedSlides = context.presentation.getSelectedSlides();
+          selectedSlides.load("items");
+          await context.sync();
+          
+          // Get the current slide index (1-based)
+          let slideNumber = null;
+          if (selectedSlides.items.length > 0) {
+            // Find the index of the selected slide
+            const selectedId = selectedSlides.items[0].id;
+            const slideIndex = slides.items.findIndex(s => s.id === selectedId);
+            slideNumber = slideIndex >= 0 ? slideIndex + 1 : null;
           }
+          
+          // For now, return styled placeholder with slide info
+          // Note: PowerPoint API doesn't support direct image export yet
+          resolve(createStyledPlaceholder(slideNumber));
+        } catch (error) {
+          console.log('PowerPoint API not available, using placeholder');
+          resolve(createStyledPlaceholder());
         }
-      );
+      });
     } catch (error) {
-      console.error('Error:', error);
+      console.log('Error accessing PowerPoint API:', error);
+      // Fallback to placeholder
       resolve(createStyledPlaceholder());
     }
   });
@@ -556,9 +900,11 @@ function openRegularWindow(url) {
 }
 
 function showSection(sectionId) {
-  document.getElementById('startSection').style.display = 'none';
-  document.getElementById('activeSection').style.display = 'none';
-  document.getElementById('loadingSection').style.display = 'none';
+  const sections = ['authSection', 'startSection', 'activeSection', 'loadingSection', 'historySection', 'sessionDetailSection'];
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   document.getElementById(sectionId).style.display = 'block';
 }
 

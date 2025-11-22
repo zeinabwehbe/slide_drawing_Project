@@ -1,6 +1,5 @@
 # Node modules
 node_modules/
-../slide-drawing-server/node_modules
 # Build output
 dist/
 build/

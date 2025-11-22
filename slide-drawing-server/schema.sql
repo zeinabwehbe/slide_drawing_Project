@@ -2,9 +2,21 @@
 CREATE DATABASE IF NOT EXISTS slide_drawing_db;
 USE slide_drawing_db;
 
+-- Teachers table
+CREATE TABLE IF NOT EXISTS teachers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_username (username),
+  INDEX idx_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
   id VARCHAR(20) PRIMARY KEY,
+  teacher_id INT NOT NULL,
   slide_image LONGTEXT NOT NULL,
   teacher_socket_id VARCHAR(100),
   timer_duration INT DEFAULT NULL,
@@ -14,6 +26,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   timer_end BIGINT DEFAULT NULL,
   closed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+  INDEX idx_teacher_id (teacher_id),
   INDEX idx_closed (closed),
   INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
