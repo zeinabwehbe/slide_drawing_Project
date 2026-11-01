@@ -24,7 +24,7 @@ source c:/Users/Zayna/Downloads/RM_Project/slide-drawing-server/schema.sql
 Or manually run the SQL commands from `schema.sql` file.
 
 ### 3. Configure Database Connection
-Edit the `.env` file in `slide-drawing-server` folder:
+Copy `.env.example` to `.env` in the `slide-drawing-server` folder, then fill in your values:
 
 ```
 DB_HOST=localhost
@@ -32,6 +32,7 @@ DB_USER=root
 DB_PASSWORD=your_mysql_password_here
 DB_NAME=slide_drawing_db
 PORT=3001
+JWT_SECRET=replace_with_a_long_random_value
 ```
 
 **Important:** Replace `your_mysql_password` with your actual MySQL root password.
