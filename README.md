@@ -18,7 +18,7 @@ mysql -u root -p
 
 Then execute the schema file:
 ```sql
-source c:/Users/Zayna/Downloads/RM_Project/slide-drawing-server/schema.sql
+source slide-drawing-server/schema.sql
 ```
 
 Or manually run the SQL commands from `schema.sql` file.
